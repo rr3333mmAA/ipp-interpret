@@ -1,0 +1,87 @@
+Implementation.
+1. Parameters:
+    1) --help
+    2) --source=file
+    3) --input=file
+2. Errors:
+    1) 10
+    2) 11
+    3) 12
+    4) 20-69
+    5) 99
+    6) 31
+    7) 32
+    8) 52
+    9) 53
+    10) 54
+    11) 55
+    12) 56
+    13) 57
+    14) 58
+3. OOP
+4. Bonus:
+    1) FLOAT
+    2) STACK
+    3) STATI
+5. Memory model:
+    1) GF
+    2) LF
+    3) TF
+6. Data types (dynamic):
+    1) int
+    2) bool
+    3) string:
+        1. whitespace
+        2. #
+        3. \
+        4. escape sequence
+    4) nil
+6. Annotation (https://docs.python.org/3.10/library/typing.html)
+6. Comments
+7. Recommendation: use library for read XML
+
+Documentation.
+1. OO description
+2. UML diagram
+3. min. 2 pages
+
+At the end.
+1. supplementary-tests.zip
+2. ipp-2023-tests.zip
+3. is_it_ok.sh
+4. Read ipp23spec.pdf
+5. Read project comments (https://moodle.vut.cz/mod/page/view.php?id=272414)
+6. Read FAQ (https://moodle.vut.cz/mod/page/view.php?id=298803#Projekt)
+7. PEP 8
+8. Merlin test
+9. GitHub
+10. Read previous (1 project) test
+
+CH = pravopisné chyby, překlepy
+FORMAT = špatný formát vzhledu dokumentu (nedodrženy požadavky)
+SHORT = nesplňuje minimální požadavky na délku či obsah
+STRUCT = nevhodně strukturováno (např. bez nadpisů)
+MISSING = dokumentace nebyla odevzdána (nebo chybí její významná část: ohledně interpret.py cca 50 %, test.php cca 25 % a přehlednost a komentování kódu cca 25 %)
+COPY = text obsahuje úryvky ze zadání nebo cizí necitované materiály
+STYLE = stylizace vět, nečitelnost, nesrozumitelnost
+COMMENT = chybějící nebo nedostatečné komentáře ve zdrojovém textu
+FILO = nedostatečná filosofie návrhu (abstraktní popis struktury programu, co následuje za čím)
+JAK/HOW = technicky nedostatečný popis řešení
+SRCFORMAT = opravdu velmi špatná štábní kultura zdrojového kódu
+SPACETAB (jen pro informaci) = kombinování mezer a tabelátorů k odsazování zdrojového textu
+DECOMPOSE	= skript není vůbec/dostatečně dekomponován na funkce (příp. třídy a metody), nešikovné opakování regulárních výrazů
+AUTHOR (jen pro informaci) = ve skriptu chybí jméno (login) autora
+OOP, NV, EX = smysluplné a dokumentované využití objektového paradigmatu, návrhových vzorů, nebo výjimek
+LANG = míchání jazyků (většinou anglické termíny v českém textu)
+HOV = hovorové nebo nevhodné slangové výrazy
+FORM = nepěkná úprava, nekonzistentní velikost a typ písma apod.
+TERM = problematická terminologie (neobvyklá, nepřesná či přímo špatná)
+IR = nedostatečně popsaná vnitřní reprezentace (např. pro paměť, sekvenci instrukcí apod.)
+PRED (jen pro informaci) = pozor na osamocené neslabičné předložky na konci řádků
+BLOK (jen pro informaci) = chybí zarovnaní do bloku místo méně pěkného zarovnání na prapor (doleva)
+KAPTXT (jen pro informaci) = mezi nadpisem a jeho podnadpisem by měl být vždy nějaký text
+MEZ (jen pro informaci) = za otevírající nebo před zavírající závorku mezera nepatří, případně další prohřešky při sazbě mezer
+ICH (jen pro informaci) = ich-forma (psaní v první osobě jednotného čísla) není většinou vhodná pro programovou dokumentaci
+SAZBA (jen pro informaci) = alespoň identifikátory proměnných a funkcí se patří sázet písmem s jednotnou šířkou písmen (např. font Courier)
+WHY = u rozšíření NVP nebylo v dokumentaci řádné použití návrhového vzoru zdůvodněno
+OK = k dokumentaci byly nanejvýše nepodstatné připomínky
