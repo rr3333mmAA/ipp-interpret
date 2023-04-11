@@ -43,10 +43,12 @@ Implementation.
 Documentation.
 1. OO description
 2. UML diagram
-3. min. 2 pages
+3. Min. 2 pages
 
 At the end.
-1. supplementary-tests.zip
+1. supplementary-tests.zip:
+    1) Test
+    2) Read README.md
 2. ipp-2023-tests.zip
 3. is_it_ok.sh
 4. Read ipp23spec.pdf
