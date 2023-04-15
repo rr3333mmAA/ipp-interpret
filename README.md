@@ -5,7 +5,7 @@
 
 The script loads an XML representation of a program interprets the program using input according to command line parameters and generates output.
 
-## Usage/Examples
+## Usage
 
 **Usage**
 ```bash
