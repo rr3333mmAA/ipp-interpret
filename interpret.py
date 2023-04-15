@@ -67,7 +67,7 @@ class Function:
 
     def move(self, var: str, symb: list) -> None:
         value = self._get_value(symb)
-        self._set_value(var, symb)
+        self._set_value(var, value)
 
     def create_frame(self) -> None:
         self.frames["TF"] = {}
@@ -93,19 +93,18 @@ class Function:
 
     def read(self, var: str, type_: str) -> None:
         value = input('TEST INPUT: ')
-        if value != '':
-            if type_ == 'int':
-                value = None if not value.isdigit() else value
-            elif type_ == 'bool':
-                value = 'false' if value.lower() != 'true' else 'true'
-        else:
+        if value == '':
             value = None
-        self._set_value(var, [type_, value])
+        elif type_ == 'bool':
+            value = 'false' if value.lower() != 'true' else 'true'
+        elif type_ == 'int':
+            value = value if value.isdigit() else None
+        self._set_value(var, value)
 
     def write(self, symb: list) -> None:
         value = self._get_value(symb)
         # value = codecs.decode(value, 'unicode-escape')
-        if symb[0] == 'bool' or symb[0] == 'nil':
+        if symb[0] in ['bool', 'nil']:
             print(value)
         else:
             print(value, end='')
@@ -119,14 +118,8 @@ class Function:
             return self.frames[frame][name]
         return value
 
-    def _set_value(self, var: str, symb: list) -> None:
+    def _set_value(self, var: str, value: str) -> None:
         var_frame, var_name = self._var_split(var)
-        type_, value = symb
-        if type_ == 'var':
-            symb_frame, symb_name = self._var_split(value)
-            if symb_name not in self.frames[symb_frame]:
-                exit()  # Error
-            value = self.frames[symb_frame][symb_name]
         self.frames[var_frame][var_name] = value
 
     @staticmethod
@@ -188,6 +181,7 @@ def main() -> None:
         instructions = Instruction.get_instructions_from_xml(cline_args.source)
         inter = Interpreter()
         inter.interpret(instructions)
+
 
 if __name__ == '__main__':
     main()
