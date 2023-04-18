@@ -12,6 +12,13 @@ TODO:
  all 'symb: list' change to 'symb: str'
  check var name
  wrong opcode check
+ find pass
+ write (bool, None)
+ bad source file
+ wrong number of args
+ wrong args
+ arg order
+ 32 and 52 error
 """
 import argparse
 import xml.etree.ElementTree as ET
@@ -23,6 +30,7 @@ class Argument:
     """
     Instruction argument class
     """
+
     def __init__(self, arg_type: str, text: str) -> None:
         self.type_ = arg_type
         self.text = text
@@ -37,8 +45,10 @@ class Argument:
         if arg_type == 'bool':
             text = 'true' if text.lower() == 'true' else 'false'
         elif arg_type == 'int':
-            if not text.isdigit():
-                exit(56)  # Error
+            try:
+                int(text)
+            except ValueError:
+                exit(32) # Error
         elif arg_type == 'string':
             matches = set(re.findall(r'\\[0-9]{3}', text))
             for match in matches:
@@ -70,27 +80,50 @@ class Instruction:
         :param src: XML source file
         :return: List with all instructions
         """
-        root = ET.parse(src).getroot()
+        try:
+            root = ET.parse(src).getroot()
+        except ET.ParseError:
+            exit(31)  # Error
 
-        for instr in root.findall('instruction'):
+        if root.tag != 'program' or root.attrib['language'] != 'IPPcode23':
+            exit(32)  # Error
+
+        for instr in root:
+            if instr.tag != 'instruction' or 'order' not in instr.attrib or 'opcode' not in instr.attrib:
+                exit(32)  # Error
+            args = []
+            for num in range(len(instr)):
+                arg = instr.find(f'arg{num + 1}')
+                if arg is None or 'type' not in arg.attrib:
+                    exit(32)  # Error
+                arg.text = arg.text.strip() if arg.text is not None else ''
+                args.append(Argument.add(arg.get('type'), arg.text))
+
+            try:
+                order = int(instr.get('order'))
+            except ValueError:
+                exit(32)
+
             Instruction(
-                order=int(instr.get('order')),
+                order=order,
                 opcode=instr.get('opcode'),
-                args=[Argument.add(arg.get('type'), arg.text.strip()) for arg in instr]
+                args=args
             )
 
         return cls.all_
 
 
 class Function:
-    def __init__(self) -> None:
+    def __init__(self, stdin) -> None:
+        self.stdin = stdin
         self.frames = {
             "GF": {},
             "LF": None
         }
         self.frame_stack = []
         self.stack = []
-        # self.call_stack = []
+        self.position = 0
+        self.call_stack = []
         self.labels = {}
 
     def instr_move(self, var: str, symb: str) -> None:
@@ -101,39 +134,45 @@ class Function:
         self.frames["TF"] = {}
 
     def instr_pushframe(self) -> None:
-        if self.frames["TF"] is None:
-            exit()  # Error
+        if "TF" not in self.frames:
+            exit(55)  # Error
+        self.frame_stack.append(self.frames["LF"])
         self.frames["LF"] = self.frames["TF"]
         self.frames["TF"] = None
-        self.frame_stack.append(self.frames["LF"])
 
     def instr_popframe(self) -> None:
         if not self.frame_stack:
-            exit()  # Error
+            exit(55)  # Error
         self.frames["TF"] = self.frames["LF"]
         self.frames["LF"] = self.frame_stack.pop()
 
     def instr_defvar(self, var: str) -> None:
         frame, name = self._var_split(var)
+        if frame not in {'GF', 'LF', 'TF'}:
+            exit(52)  # Error (May be)
+        if frame == 'TF' and 'TF' not in self.frames:
+            exit(55)  # Error
         if name in self.frames[frame]:
-            exit()  # Error
+            exit(52)  # Error
         self.frames[frame][name] = None
 
-    def instr_call(self, label: str, position: int) -> None:
-        pass
-        # self.call_stack.append(position)
-        # if label not in self.labels:
-        #     exit()  # Error
+    def instr_call(self, label: str) -> None:
+        self.call_stack.append(self.position)
+        self.instr_jump(label)
 
     def instr_return(self) -> None:
-        pass
+        if not self.call_stack:
+            exit(56)  # Error
+        self.position = self.call_stack[-1]
+        self.call_stack.pop()
 
     def instr_pushs(self, symb: str) -> None:
         value = self._get_value(symb)
         self.stack.append(value)
 
     def instr_pops(self, var: str) -> None:
-        # if stack is not empty
+        if not self.stack:
+            exit(56)  # Error
         value = self.stack[-1]
         self._set_value(var, value)
         self.stack.pop()
@@ -174,78 +213,121 @@ class Function:
         value = self._operator(symb1, symb2, 'or')
         self._set_value(var, value)
 
-    def instr_not(self, var: str, symb1: str, symb2: str) -> None:
-        value = self._operator(symb1, symb2, 'not')
-        self._set_value(var, value)
+    # Redesign
+    def instr_not(self, var: str, symb1: str) -> None:
+        value = self._get_value(symb1)
+        if not isinstance(value, bool):
+            exit(53)  # Error
+        self._set_value(var, not bool(value))
 
     def instr_int2char(self, var: str, symb: str) -> None:
         value = self._get_value(symb)
-        self._set_value(var, chr(int(value)))
+        if type(value) is not int:
+            exit(53)  # Error
+        try:
+            self._set_value(var, chr(value))
+        except ValueError:
+            exit(58)  # Error
 
     def instr_stri2int(self, var: str, symb1: str, symb2: str) -> None:
         value, index = self._get_some_values(symb1, symb2)
-        index = int(index)
+        if not isinstance(value, str) or type(index) is not int:
+            exit(53)  # Error
+        elif index >= len(value):
+            exit(58)  # Error
         self._set_value(var, str(ord(value[index])))
 
     def instr_read(self, var: str, type_: str) -> None:
-        value = input('TEST INPUT: ')
+        value = input() if self.stdin is None else self.stdin
+        value = value.replace('\n', '')
+
         if value == '':
             value = None
         elif type_ == 'bool':
             value = 'false' if value.lower() != 'true' else 'true'
         elif type_ == 'int':
-            value = value if value.isdigit() else None
+            try:
+                value = int(value)
+            except ValueError:
+                value = None
         self._set_value(var, value)
 
     def instr_write(self, symb: str) -> None:
         value = self._get_value(symb)
-        if symb[0] in ['bool', 'nil']:
-            print(value)
+        if isinstance(value, bool):
+            print('true' if value else 'false', end='')
+        elif value is None:
+            print('', end='')
         else:
             print(value, end='')
 
     def instr_concat(self, var: str, symb1: str, symb2: str) -> None:
-        value = self._operator(symb1, symb2, '+')
+        value = self._operator(symb1, symb2, '.')
         self._set_value(var, value)
 
     def instr_strlen(self, var: str, symb: str) -> None:
         value = self._get_value(symb)
-        self._set_value(var, str(len(value)))
+        if not isinstance(value, str):
+            exit(53)  # Error
+        self._set_value(var, len(value))
 
     def instr_getchar(self, var: str, symb1: str, symb2: str) -> None:
         value, index = self._get_some_values(symb1, symb2)
-        index = int(index)
+        if type(index) is not int or not isinstance(value, str):
+            exit(53)  # Error
+        elif index >= len(value):
+            exit(58)  # Error
         self._set_value(var, value[index])
 
     def instr_setchar(self, var: str, symb1: str, symb2: str) -> None:
         index, char = self._get_some_values(symb1, symb2)
-        index = int(index)
-        var_value = self._var_split(var)[1]
-        value = var_value[:index] + char + var_value[index+1:]
+        var_value = self._get_value(var)
+        if type(index) is not int or not isinstance(char, str):
+            exit(53)  # Error
+        elif index >= len(var_value):
+            exit(58)  # Error
+        value = var_value[:index] + char + var_value[index + 1:]
         self._set_value(var, value)
 
     def instr_type(self, var: str, symb: str) -> None:  # change name
-        self._set_value(var, symb[0])
+        value = self._get_value(symb)
+        if type(value) is int:
+            self._set_value(var, 'int')
+        if type(value) is str:
+            self._set_value(var, 'string')
+        if type(value) is bool:
+            self._set_value(var, 'bool')
+        if value is None:
+            self._set_value(var, 'nil')
 
     def instr_label(self, label: str) -> None:
-        # if label in labels
-        self.labels[label] = None
+        pass
 
     def instr_jump(self, label: str) -> None:
-        pass
+        if label not in self.labels:
+            exit(52)  # Error
+        self.position = self.labels[label]
 
     def instr_jumpifeq(self, label: str, symb1: str, symb2: str) -> None:
         value1, value2 = self._get_some_values(symb1, symb2)
+        if type(value1) != type(value2) and value1 is not None and value2 is not None:
+            exit(53)  # Error
         if value1 == value2:
-            pass
+            self.instr_jump(label)
 
     def instr_jumpifneq(self, label: str, symb1: str, symb2: str) -> None:
         value1, value2 = self._get_some_values(symb1, symb2)
+        if type(value1) != type(value2) and value1 is not None and value2 is not None:
+            exit(53)  # Error
         if value1 != value2:
-            pass
+            self.instr_jump(label)
 
     def instr_exit(self, symb: str) -> None:
         value = self._get_value(symb)
+        if type(value) is not int:
+            exit(53)  # Error
+        if value < 0 or value > 49:
+            exit(57)  # Error
         exit(value)
 
     def instr_dprint(self, symb: str) -> None:
@@ -255,30 +337,61 @@ class Function:
     def instr_break(self) -> None:
         pass
 
-    def _get_value(self, symb: str) -> str:
+    def _get_value(self, symb: str) -> any:
         value = symb.split('@', 1)
         if value[0] in {'GF', 'LF', 'TF'}:
+            if self.frames[value[0]] is None:
+                exit(55)  # Error
+            if value[1] not in self.frames[value[0]]:
+                exit(54)  # Error
             return self.frames[value[0]][value[1]]
+        elif value[0] == 'int':
+            return int(value[1])
+        elif value[0] == 'bool':
+            return value[1].lower() == 'true'
+        elif value[0] == 'nil':
+            return None
         return value[1]
 
     def _get_some_values(self, *args: str) -> list:
         return [self._get_value(arg) for arg in args]
 
-    def _set_value(self, var: str, value: str) -> None:
+    def _set_value(self, var: str, value: any) -> None:
         var_frame, var_name = self._var_split(var)
+        if var_name not in self.frames[var_frame]:
+            exit(54)  # Error
         self.frames[var_frame][var_name] = value
 
-    def _operator(self, symb1: str, symb2: str, op: str) -> str:
+    # Redesign
+    def _operator(self, symb1: str, symb2: str, op: str) -> any:
         value1, value2 = self._get_some_values(symb1, symb2)
 
-        if op in {'+', '-', '*', '<', '>', '=='}:
-            return eval(f'str(value1 {op} value2)')
+        if op in {'+', '-', '*'}:
+            if type(value1) is not int or type(value2) is not int:
+                exit(53)  # Error
+            return eval(f'value1 {op} value2')
+        if op in {'<', '>'}:
+            if type(value1) != type(value2) or value1 is None:
+                exit(53)  # Error
+            return eval(f'value1 {op} value2')
+        if op == '==':
+            if type(value1) != type(value2) and value1 is not None and value2 is not None:
+                exit(53)  # Error
+            return value1 == value2
         elif op == '/':
-            return str(int(value1 / value2))
-        elif op in {'and', 'or', 'not'}:
-            value1 = value1.lower() == 'true'
-            value2 = value2.lower() == 'true'
-            return eval(f'str(value1 {op} value2)')
+            if type(value1) is not int or type(value2) is not int:
+                exit(53)  # Error
+            elif value2 == 0:
+                exit(57)  # Error
+            return int(value1) // int(value2)
+        elif op == '.':
+            if not isinstance(value1, str) or not isinstance(value2, str):
+                exit(53)  # Error
+            return value1 + value2
+        elif op in {'and', 'or'}:
+            if not isinstance(value1, bool) or not isinstance(value2, bool):
+                exit(53)  # Error
+            return eval(f'value1 {op} value2')
 
     @staticmethod
     def _var_split(var: str) -> list:
@@ -286,19 +399,43 @@ class Function:
 
 
 class Interpreter:
-    def __init__(self) -> None:
-        self.function = Function()
-        self.position = 0
+    def __init__(self, stdin) -> None:
+        self.function = Function(stdin)
 
-    def interpret(self, instructions: list) -> None:  # Change this method (mb by using getattr() and lower())
+    def interpret(self, instructions: list) -> None:
+        instructions = self._parse_order(instructions)
+        self._parse_labels(instructions)
         func = self.function
-        while self.position < len(instructions):
-            instruction = instructions[self.position]
+        while func.position < len(instructions):
+            instruction = instructions[func.position]
             attr = f'instr_{instruction.opcode.lower()}'
             args = self._get_args(instruction)
-            executor = getattr(func, attr)
+            try:
+                executor = getattr(func, attr)
+            except AttributeError:
+                exit(32)
+            self._op_check(executor, args)
             executor(*args)
-            self.position += 1
+            func.position += 1
+
+    def _parse_labels(self, instructions: list) -> None:
+        for position, instruction in enumerate(instructions):
+            if instruction.opcode.upper() == 'LABEL':
+                if self._get_args(instruction)[0] in self.function.labels:
+                    exit(52)  # Exit
+                self.function.labels[self._get_args(instruction)[0]] = position
+
+    @staticmethod
+    def _parse_order(instructions: list) -> list:
+        orders = []
+        for instruction in instructions:
+            if instruction.order < 1:
+                exit(32)  # Error
+            orders.append(instruction.order)
+        if len(set(orders)) != len(orders):
+            exit(32)  # Error
+
+        return sorted(instructions, key=lambda x: x.order)
 
     @staticmethod
     def _get_args(instruction: Instruction) -> list:
@@ -317,8 +454,25 @@ class Interpreter:
                 exit(56)  # Error
         return result
 
+    @staticmethod
+    def _op_check(function: any, args: list) -> None:
+        func_code = function.__code__
+        argcount = func_code.co_argcount
+        func_args = func_code.co_varnames[1:argcount]
+        if len(args) != argcount - 1:
+            exit(32)  # Error
+        for num, arg in enumerate(func_args):
+            if arg == 'var' and args[num].split('@')[0] not in {'GF', 'LF', 'TF'}:
+                exit(52)  # Error
+            elif 'symb' in arg and args[num].split('@')[0] not in {'GF', 'LF', 'TF', 'int', 'bool', 'string', 'nil'}:
+                exit(52)  # Error
+            elif arg == 'type_' and args[num] not in {'int', 'string', 'bool', 'label', 'nil'}:
+                exit(32)  # Error
+
 
 def main() -> None:
+    stdin = None
+
     # Command line argument parser (--help, --source=file, --input=file)
     parser = argparse.ArgumentParser(
         description='The script loads an XML representation of a program '
@@ -330,17 +484,26 @@ def main() -> None:
     cline_args = parser.parse_args()  # Change var name (?)
 
     # Debug
-    # cline_args.source = "./tests/my_tests/test1.src"
+    # cline_args.input = './tests/read_test.in'
+    # cline_args.input = "./tests/my_tests/test1.in"
+
+    # cline_args.source = "./tests/error_string_out_of_range.src"
     # cline_args.source = "./tests/read_test.src"
     # cline_args.source = "./tests/spec_example.src"
+    # cline_args.source = "./tests/stack_test.src"
+    # cline_args.source = "./tests/write_test.src"
+    # cline_args.source = "./tests/my_tests/test1.src"
+
+    try:
+        file = cline_args.input
+        with open(file, 'r') as f:
+            stdin = f.read()
+    except TypeError:
+        pass
 
     if cline_args.source or cline_args.input:
-        # if cline_args.input:
-        #     output_file = cline_args.input
-
-        # Getting all instructions from source XML
         instructions = Instruction.get_instructions_from_xml(cline_args.source)
-        inter = Interpreter()
+        inter = Interpreter(stdin)
         inter.interpret(instructions)
 
 
