@@ -1,7 +1,6 @@
 #
 # Abayev Amirkhan (xabaye00)
 #
-import argparse
 import xml.etree.ElementTree as ET
 import re
 import sys
@@ -124,6 +123,8 @@ class Instruction:
         # Parse an XML file and return its root
         try:
             root = ET.parse(src).getroot()
+        except FileNotFoundError:
+            exit(11)  # Error
         except ET.ParseError:
             exit(31)  # Error
         return root
@@ -745,7 +746,10 @@ class Interpreter:
 
     def _count_vars(self, func: any) -> None:
         # Get the maximum number of initialized variables present at any one time in all valid frames
-        res = sum(len(frame) for frame in func.frames)
+        res = 0
+        for frame in func.frames:
+            if func.frames[frame] is not None:
+                res += len(func.frames[frame])
         if res > self.vars:
             self.vars = res
 
@@ -820,7 +824,7 @@ class Interpreter:
             exit(32)  # Error
         for num, arg in enumerate(func_args):
             if arg == 'var' and args[num].split('@')[0] not in {'GF', 'LF', 'TF'}:
-                exit(52)  # Error
+                exit(32)  # Error
             elif 'symb' in arg and args[num].split('@')[0] not in {'GF', 'LF', 'TF', 'int',
                                                                    'bool', 'string', 'nil', 'float'}:
                 exit(52)  # Error
@@ -837,20 +841,29 @@ class Statistic:
         self.interpreter = None
         self.print_arg = None
 
-    def stats(self, interpreter: Interpreter, args: list, file: str, print_arg: list) -> None:
+    def stats(self, interpreter: Interpreter, args: list, file_name: str) -> None:
         # Method to calculate and write statistics to a file based on given arguments
         self.interpreter = interpreter
-        self.print_arg = print_arg
-        with open(file, 'w') as file:
-            for arg in args:
-                arg = arg.lower().lstrip('--')
+
+        # Open file
+        try:
+            file = open(file_name, 'w')
+        except OSError:
+            exit(12)  # Error
+
+        # Parse arguments
+        for arg in args:
+            arg = arg.lstrip('--')
+            if 'print=' in arg:
+                self.print_arg = arg.split('=')[1]
                 arg = re.sub('=.*', '', arg)
-                try:
-                    method = getattr(self, f'arg_{arg}')
-                    string = str(method())+'\n'
-                    file.write(string)
-                except (TypeError, AttributeError):
-                    pass
+            try:
+                method = getattr(self, f'arg_{arg.lower()}')
+                string = str(method())+'\n'
+                file.write(string)
+            except (TypeError, AttributeError):
+                pass
+        file.close()
 
     def arg_insts(self):
         # Return insts
@@ -877,9 +890,7 @@ class Statistic:
 
     def arg_print(self):
         # Return print
-        res = self.print_arg[0]
-        self.print_arg.pop(0)
-        return res
+        return self.print_arg
 
     @staticmethod
     def arg_eol():
@@ -887,46 +898,82 @@ class Statistic:
         return '\n'
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args() -> dict:
     # This function defines a parser for command line arguments
     # and returns the parsed arguments
     # [--source=SOURCE] [--input=INPUT] [--stats=STATS] [--insts] [--hot] [--vars] [--frequent] [--print=PRINT] [--eol]
-    parser = argparse.ArgumentParser(
-        description='The script loads an XML representation of a program '
-                    'interprets the program using input according to command line parameters '
-                    'and generates output.'
-    )
-    parser.add_argument('--source', type=str, help="An source file with an XML representation of the source code")
-    parser.add_argument('--input', type=str, help="Input file for using as standard input")  # Change help
-    parser.add_argument('--stats', type=str, help="Get the code interpretation statistics")
-    parser.add_argument('--insts', action='store_true', help="Listing the number of executed instructions")
-    parser.add_argument('--hot', action='store_true', help="Returns value of the order instruction attribute "
-                                                           "that was executed the most times and has the "
-                                                           "smallest value of the order attribute")
-    parser.add_argument('--vars', action='store_true', help="List the maximum number of initialized variables present "
-                                                            "at one time in all valid frames")
-    parser.add_argument('--frequent', action='store_true', help="Returns the names of the most common operation codes")
-    parser.add_argument('--print', action='append', help="Prints the string string to the statistics")
-    parser.add_argument('--eol', action='store_true', help="Prints the end of line")
-    try:
-        args = parser.parse_args()
-    except SystemExit:
-        exit(10)
+    help_msg = """
+    usage: interpret.py [-h] [--source=FILE] [--input=FILE] [--stats=FILE] [--insts] [--hot] [--vars] [--frequent] [--print=STRING] [--eol]
 
-    # Check if stats arguments were called without '--stats'
-    if not args.stats and (args.insts or args.hot or args.vars or args.frequent or args.print or args.eol):
-        exit(10)
+    The script loads an XML representation of a program interprets the program using input according to
+    command line parameters and generates output.
 
-    return args
+    options:
+      -h, --help       show this help message and exit
+      --source=FILE    An source file with an XML representation of the source code
+      --input=FILE     Input file for using as standard input
+      --stats=FILE     Get the code interpretation statistics
+      --insts          Listing the number of executed instructions
+      --hot            Returns value of the order instruction attribute that was executed the most times and
+                       has the smallest value of the order attribute
+      --vars           List the maximum number of initialized variables present at one time in all valid frames
+      --frequent       Returns the names of the most common operation codes
+      --print=STRING   Prints the string string to the statistics
+      --eol            Prints the end of line
+    """
+
+    stats_lists = []
+    temp_list = []
+    pattern = lambda p: fr"^--{p}=(.*)$"
+
+    src = None
+    inp = None
+
+    # Help argument
+    if '-h' in sys.argv or '--help' in sys.argv:
+        print(help_msg)
+        exit(0)
+
+    for param in sys.argv:
+        src_match = re.search(pattern('source'), param)
+        if src_match is not None:
+            src = src_match.group(1).strip()
+            continue
+
+        inp_match = re.search(pattern('input'), param)
+        if inp_match is not None:
+            inp = inp_match.group(1).strip()
+            continue
+
+        st_match = re.search(pattern('stats'), param)
+        if st_match is not None:
+            if temp_list:
+                stats_lists.append(temp_list)
+                temp_list = []
+            temp_list.append(param)
+            continue
+
+        pr_match = re.search(pattern('print'), param)
+        if not temp_list and (param in ['--insts', '--hot', '--vars', '--frequent', '--eol'] or pr_match is not None):
+            exit(10)
+        elif param in ['--insts', '--hot', '--vars', '--frequent', '--eol'] or pr_match is not None:
+            temp_list.append(param)
+    if temp_list:
+        stats_lists.append(temp_list)
+
+    return {'source': src, 'input': inp, 'stats_lists': stats_lists}
 
 
 def get_stdin(input_file: str) -> str:
     # Get standard input from a file specified by the input_file
     try:
-        with open(input_file, 'r') as f:
-            stdin = f.read()
-    except TypeError:
-        exit(11)
+        file = open(input_file, 'r')
+    except FileNotFoundError:
+        exit(11)  # Error
+
+    stdin = file.read()
+    file.close()
+
     return stdin
 
 
@@ -934,19 +981,18 @@ def main() -> None:
     # Entry point of the program
     args = parse_args()
 
-    source = args.source
+    source = args['source']
     if source is not None:
-        input_file = args.input
+        input_file = args['input']
         stdin = get_stdin(input_file) if input_file is not None else None
 
         instructions = Instruction.get_instructions_from_xml(source)
         inter = Interpreter(stdin)
         inter.interpret(instructions)
 
-        stats = args.stats
-        if stats is not None:
-            print_arg = args.print
-            Statistic().stats(inter, sys.argv, stats, print_arg)
+        for stats in args['stats_lists']:
+            stats_file = stats[0].split('=')[1]
+            Statistic().stats(inter, stats[1:], stats_file)
 
 
 if __name__ == '__main__':
